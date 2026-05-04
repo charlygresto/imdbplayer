@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>IMDb Player</title>
+    <style>
+        /* Force the body to be exactly the size of the window */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+        }
+
+        .video-container {
+            position: fixed; 
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="video-container">
+        <!-- The ID 'videoPlayer' allows JS to target this element -->
+        <iframe 
+            id="videoPlayer"
+            src="" 
+            referrerpolicy="origin" 
+            allow="autoplay; fullscreen"
+            sandbox="allow-forms allow-scripts allow-pointer-lock allow-same-origin allow-presentation"
+            allowfullscreen>
+        </iframe>
+    </div>
+
+    <script>
+        // 1. Get the parameters from the URL (e.g., ?id=tt123&type=movie)
+        const params = new URLSearchParams(window.location.search);
+        const imdbID = params.get('id');
+        const type = params.get('type'); // 'movie' or 'tv'
+
+        const player = document.getElementById('videoPlayer');
+
+        // 2. Check if the parameters exist
+        if (imdbID && type) {
+            // 3. Construct the source URL based on the type
+            // Note: your script uses 'tv' for series, matching streamimdb.ru/embed/tv/
+            const newSrc = `https://streamimdb.ru/embed/${type}/${imdbID}`;
+            
+            // 4. Update the iframe src
+            player.src = newSrc;
+        } else {
+            // Optional: Error handling if someone visits the page without params
+            document.body.innerHTML = "<h2 style='color:white; text-align:center; margin-top:20%; font-family:sans-serif;'>No Video ID Provided</h2>";
+        }
+    </script>
+
+</body>
+</html>
