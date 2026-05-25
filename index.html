@@ -2,29 +2,28 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>IMDb Player</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cinema Mode - Stream Interface</title>
     <style>
-        /* Force the body to be exactly the size of the window */
-        html, body {
+        * {
+            box-sizing: border-box;
+        }
+        
+        body, html {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
-            overflow: hidden;
             background-color: #000;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
 
-        .video-container {
-            position: fixed; 
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            height: 100dvh; 
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        /* Fullscreen Container Wrapper */
+        .player-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
         }
 
         iframe {
@@ -32,43 +31,260 @@
             height: 100%;
             border: none;
         }
+
+        /* Smart Click Overlay Layer - 50% Height & Centered Vertically */
+        .smart-overlay {
+            position: absolute;
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+            width: 50px;
+            height: 50%;
+            background: linear-gradient(to left, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0) 100%);
+            opacity: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: opacity 0.2s ease;
+            z-index: 10;
+            border-top-left-radius: 8px;
+            border-bottom-left-radius: 8px;
+        }
+
+        .player-container:hover .smart-overlay {
+            opacity: 1;
+        }
+
+        .next-arrow {
+            color: #fff;
+            font-size: 2rem;
+            font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            transform: translateX(2px);
+        }
+
+        /* Floating HUD Indicator & Dropdowns */
+        .hud-display {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(51, 65, 85, 0.6);
+            padding: 0.5rem 0.8rem;
+            border-radius: 6px;
+            color: #38bdf8;
+            font-weight: bold;
+            font-size: 0.9rem;
+            z-index: 20;
+            letter-spacing: 0.05em;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .hud-display select {
+            background: #1e293b;
+            color: #38bdf8;
+            border: 1px solid #475569;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .hud-display select:focus {
+            border-color: #38bdf8;
+        }
+
+        .hidden {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
 
-    <div class="video-container">
-        <!-- The ID 'videoPlayer' allows JS to target this element -->
-        <iframe 
-            id="videoPlayer"
-            src="" 
-            referrerpolicy="origin" 
-            allow="autoplay; fullscreen"
-            sandbox="allow-forms allow-scripts allow-pointer-lock allow-same-origin allow-presentation"
-            allowfullscreen>
-        </iframe>
+<div class="player-container">
+    <div class="hud-display" id="hudTracker">
+        <span id="hudStatus">INITIALIZING...</span>
+        <select id="seasonSelect" class="hidden" onchange="handleSeasonChange()"></select>
+        <select id="episodeSelect" class="hidden" onchange="handleEpisodeChange()"></select>
     </div>
 
-    <script>
-        // 1. Get the parameters from the URL (e.g., ?id=tt123&type=movie)
-        const params = new URLSearchParams(window.location.search);
-        const imdbID = params.get('id');
-        const type = params.get('type'); // 'movie' or 'tv'
+    <iframe id="videoPlayer" allow="autoplay; fullscreen" allowfullscreen></iframe>
 
-        const player = document.getElementById('videoPlayer');
+    <div class="smart-overlay" id="nextOverlay" title="Advance Stream Sequence" onclick="triggerNextEpisode()">
+        <div class="next-arrow">❯</div>
+    </div>
+</div>
 
-        // 2. Check if the parameters exist
-        if (imdbID && type) {
-            // 3. Construct the source URL based on the type
-            // Note: your script uses 'tv' for series, matching streamimdb.ru/embed/tv/
-            const newSrc = `https://streamimdb.ru/embed/${type}/${imdbID}`;
-            
-            // 4. Update the iframe src
-            player.src = newSrc;
+<script>
+    const state = {
+        contentType: 'tv', 
+        imdbId: 'tt1986770', 
+        currentSeason: 1,
+        currentEpisode: 1,
+        episodesData: [] 
+    };
+
+    // Parses the complete URL string so it works on web hosts and local files
+    function parseUrlRoute() {
+        const fullUrl = window.location.href;
+        const tvMatch = fullUrl.match(/\/tv\/(tt\d+)/i);
+        const movieMatch = fullUrl.match(/\/movie\/(tt\d+)/i);
+
+        if (movieMatch) {
+            state.contentType = 'movie';
+            state.imdbId = movieMatch[1];
+        } else if (tvMatch) {
+            state.contentType = 'tv';
+            state.imdbId = tvMatch[1];
         } else {
-            // Optional: Error handling if someone visits the page without params
-            document.body.innerHTML = "<h2 style='color:white; text-align:center; margin-top:20%; font-family:sans-serif;'>No Video ID Provided</h2>";
+            // Fallback default if nothing matches
+            state.contentType = 'tv';
         }
-    </script>
+    }
+
+    async function initializeInterface() {
+        parseUrlRoute();
+
+        if (state.contentType === 'movie') {
+            document.getElementById('hudStatus').textContent = `MOVIE: ${state.imdbId}`;
+            document.getElementById('seasonSelect').classList.add('hidden');
+            document.getElementById('episodeSelect').classList.add('hidden');
+            document.getElementById('nextOverlay').classList.add('hidden'); 
+            
+            updatePlayerSource();
+        } else {
+            document.getElementById('hudStatus').textContent = "FETCHING DATA...";
+            await fetchShowData();
+        }
+    }
+
+    async function fetchShowData() {
+        try {
+            const lookupUrl = `https://api.tvmaze.com/lookup/shows?imdb=${state.imdbId}`;
+            const lookupResponse = await fetch(lookupUrl);
+            if (!lookupResponse.ok) throw new Error('Show lookup failed');
+            const showData = await lookupResponse.json();
+            
+            const episodesUrl = `https://api.tvmaze.com/shows/${showData.id}/episodes`;
+            const episodesResponse = await fetch(episodesUrl);
+            if (!episodesResponse.ok) throw new Error('Episodes data extraction failed');
+            
+            state.episodesData = await episodesResponse.json();
+            
+            if(state.episodesData.length > 0) {
+                state.currentSeason = state.episodesData[0].season;
+                state.currentEpisode = state.episodesData[0].number;
+            }
+
+            document.getElementById('hudStatus').classList.add('hidden');
+            document.getElementById('seasonSelect').classList.remove('hidden');
+            document.getElementById('episodeSelect').classList.remove('hidden');
+
+            populateSeasonDropdown();
+            populateEpisodeDropdown();
+            updatePlayerSource();
+
+        } catch (error) {
+            console.error(error);
+            document.getElementById('hudStatus').textContent = "ERROR LOADING METADATA";
+        }
+    }
+
+    function populateSeasonDropdown() {
+        const seasonSelect = document.getElementById('seasonSelect');
+        seasonSelect.innerHTML = '';
+
+        const seasons = [...new Set(state.episodesData.map(ep => ep.season))].sort((a, b) => a - b);
+
+        seasons.forEach(season => {
+            const option = document.createElement('option');
+            option.value = season;
+            option.textContent = `Season ${season}`;
+            seasonSelect.appendChild(option);
+        });
+
+        seasonSelect.value = state.currentSeason;
+    }
+
+    function populateEpisodeDropdown() {
+        const episodeSelect = document.getElementById('episodeSelect');
+        episodeSelect.innerHTML = '';
+
+        const filteredEpisodes = state.episodesData.filter(ep => ep.season === parseInt(state.currentSeason));
+
+        filteredEpisodes.forEach(ep => {
+            const option = document.createElement('option');
+            option.value = ep.number;
+            option.textContent = `Ep ${ep.number}: ${ep.name || 'Untitled'}`;
+            episodeSelect.appendChild(option);
+        });
+
+        episodeSelect.value = state.currentEpisode;
+    }
+
+    function handleSeasonChange() {
+        state.currentSeason = parseInt(document.getElementById('seasonSelect').value);
+        
+        const firstEpOfSeason = state.episodesData.find(ep => ep.season === state.currentSeason);
+        state.currentEpisode = firstEpOfSeason ? firstEpOfSeason.number : 1;
+        
+        populateEpisodeDropdown();
+        updatePlayerSource();
+    }
+
+    function handleEpisodeChange() {
+        state.currentEpisode = parseInt(document.getElementById('episodeSelect').value);
+        updatePlayerSource();
+    }
+
+    function updatePlayerSource() {
+        let updatedTarget = '';
+
+        if (state.contentType === 'movie') {
+            // Corrected endpoint layout for movies
+            updatedTarget = `https://vidcore.net/movie/${state.imdbId}`;
+        } else {
+            const baseUrl = `https://vidcore.net/tv/${state.imdbId}/${state.currentSeason}/${state.currentEpisode}`;
+            const params = new URLSearchParams({
+                autoPlay: 'true',
+                hideServer: 'true',
+                fullscreenButton: 'false',
+                chromecast: 'true', 
+                nextButton: 'false'
+            });
+            updatedTarget = `${baseUrl}?${params.toString()}`;
+        }
+        
+        document.getElementById('videoPlayer').src = updatedTarget;
+    }
+
+    function triggerNextEpisode() {
+        if (state.contentType === 'movie') return;
+
+        const currentIndex = state.episodesData.findIndex(ep => ep.season === state.currentSeason && ep.number === state.currentEpisode);
+
+        if (currentIndex !== -1 && currentIndex + 1 < state.episodesData.length) {
+            const nextEpisodeNode = state.episodesData[currentIndex + 1];
+            state.currentSeason = nextEpisodeNode.season;
+            state.currentEpisode = nextEpisodeNode.number;
+
+            document.getElementById('seasonSelect').value = state.currentSeason;
+            populateEpisodeDropdown();
+            document.getElementById('episodeSelect').value = state.currentEpisode;
+
+            updatePlayerSource();
+        } else {
+            alert("You have reached the end of the series sequence.");
+        }
+    }
+
+    window.addEventListener('DOMContentLoaded', initializeInterface);
+</script>
 
 </body>
 </html>
