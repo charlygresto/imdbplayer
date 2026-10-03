@@ -247,9 +247,9 @@
 
         if (state.contentType === 'movie') {
             // Corrected endpoint layout for movies
-            updatedTarget = `https://vidcore.net/movie/${state.imdbId}`;
+            updatedTarget = `https://vidsrc.to//movie/${state.imdbId}`;
         } else {
-            const baseUrl = `https://vidcore.net/tv/${state.imdbId}/${state.currentSeason}/${state.currentEpisode}`;
+            const baseUrl = `https://vidsrc.to/tv/${state.imdbId}/${state.currentSeason}/${state.currentEpisode}`;
             const params = new URLSearchParams({
                 autoPlay: 'true',
                 hideServer: 'true',
